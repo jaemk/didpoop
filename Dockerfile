@@ -1,4 +1,4 @@
-FROM rust:1.58
+FROM rust:1.58 as builder
 
 # create a new empty shell
 RUN mkdir -p /app
@@ -30,8 +30,11 @@ COPY ./.git ./.git
 RUN git rev-parse HEAD | awk '{ printf "%s", substr($0, 0, 7)>"commit_hash.txt" }'
 RUN rm -rf ./.git
 
-# copy out the binary and delete the build artifacts
-RUN cp ./target/release/didpoop ./didpoop
-RUN rm -rf ./target
+# copy out the binary, static assets, and commit_hash
+from debian:buster-slim
+WORKDIR /app/didpoop
+COPY --from=builder /app/didpoop/commit_hash.txt ./commit_hash.txt
+COPY --from=builder /app/didpoop/static ./static
+COPY --from=builder /app/didpoop/target/release/didpoop ./didpoop
 
 CMD ["./didpoop"]

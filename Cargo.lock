@@ -460,6 +460,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "hex",
+ "itertools",
  "lazy_static",
  "ring",
  "serde",

@@ -1,11 +1,65 @@
 /*!
 Crypto things
 */
+#![allow(dead_code)]
 use ring::aead::BoundKey;
 use ring::pbkdf2;
 
 use crate::CONFIG;
 use std::num::NonZeroU32;
+
+/// Return a `Vec` of secure random bytes of size `n`
+pub fn rand_bytes(n: usize) -> crate::Result<Vec<u8>> {
+    use ring::rand::SecureRandom;
+    let mut buf = vec![0; n];
+    let sysrand = ring::rand::SystemRandom::new();
+    sysrand
+        .fill(&mut buf)
+        .map_err(|_| "Error getting random bytes")?;
+    Ok(buf)
+}
+
+pub fn new_pw_salt() -> crate::Result<Vec<u8>> {
+    rand_bytes(128)
+}
+
+pub fn derive_password_hash(pw: &[u8], salt: &[u8]) -> [u8; ring::digest::SHA512_OUTPUT_LEN] {
+    let mut out = [0; ring::digest::SHA512_OUTPUT_LEN];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        NonZeroU32::new(100_000u32).unwrap(),
+        salt,
+        pw,
+        &mut out,
+    );
+    out
+}
+
+pub fn hmac_sign(s: &str) -> String {
+    hmac_sign_with_key(s, &crate::CONFIG.signing_key)
+}
+pub fn hmac_sign_with_key(s: &str, key: &str) -> String {
+    // using a 32 byte key
+    let s_key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, key.as_bytes());
+    let tag = ring::hmac::sign(&s_key, s.as_bytes());
+    hex::encode(&tag)
+}
+
+pub fn hmac_verify(text: &str, sig: &str) -> bool {
+    hmac_verify_with_key(text, sig, &crate::CONFIG.signing_key)
+}
+
+pub fn hmac_verify_with_key(text: &str, sig: &str, key: &str) -> bool {
+    let sig = hex::decode(sig);
+    let sig = if let Ok(sig) = sig {
+        sig
+    } else {
+        return false;
+    };
+    // using a 32 byte key
+    let s_key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, key.as_bytes());
+    ring::hmac::verify(&s_key, text.as_bytes(), &sig).is_ok()
+}
 
 /// ring requires an implementor of `NonceSequence`,
 /// which if a wrapping trait around `ring::aead::Nonce`.
@@ -26,50 +80,8 @@ impl ring::aead::NonceSequence for OneNonceSequence {
     }
 }
 
-/// Return a `Vec` of secure random bytes of size `n`
-pub fn rand_bytes(n: usize) -> crate::Result<Vec<u8>> {
-    use ring::rand::SecureRandom;
-    let mut buf = vec![0; n];
-    let sysrand = ring::rand::SystemRandom::new();
-    sysrand
-        .fill(&mut buf)
-        .map_err(|_| "Error getting random bytes")?;
-    Ok(buf)
-}
-
 pub fn new_gcm_nonce() -> crate::Result<Vec<u8>> {
     rand_bytes(12)
-}
-
-pub fn new_pw_salt() -> crate::Result<Vec<u8>> {
-    rand_bytes(128)
-}
-
-pub fn hmac_sign(s: &str) -> String {
-    hmac_sign_with_key(s, &crate::CONFIG.signing_key)
-}
-pub fn hmac_sign_with_key(s: &str, key: &str) -> String {
-    // using a 32 byte key
-    let s_key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, key.as_bytes());
-    let tag = ring::hmac::sign(&s_key, s.as_bytes());
-    hex::encode(&tag)
-}
-
-#[allow(dead_code)]
-pub fn hmac_verify(text: &str, sig: &str) -> bool {
-    hmac_verify_with_key(text, sig, &crate::CONFIG.signing_key)
-}
-
-pub fn hmac_verify_with_key(text: &str, sig: &str, key: &str) -> bool {
-    let sig = hex::decode(sig);
-    let sig = if let Ok(sig) = sig {
-        sig
-    } else {
-        return false;
-    };
-    // using a 32 byte key
-    let s_key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, key.as_bytes());
-    ring::hmac::verify(&s_key, text.as_bytes(), &sig).is_ok()
 }
 
 /// Return the SHA256 hash of `bytes`
@@ -77,18 +89,6 @@ pub fn hash(bytes: &[u8]) -> Vec<u8> {
     let alg = &ring::digest::SHA256;
     let digest = ring::digest::digest(alg, bytes);
     Vec::from(digest.as_ref())
-}
-
-pub fn derive_password_hash(pw: &[u8], salt: &[u8]) -> [u8; ring::digest::SHA512_OUTPUT_LEN] {
-    let mut out = [0; ring::digest::SHA512_OUTPUT_LEN];
-    pbkdf2::derive(
-        pbkdf2::PBKDF2_HMAC_SHA512,
-        NonZeroU32::new(100_000u32).unwrap(),
-        salt,
-        pw,
-        &mut out,
-    );
-    out
 }
 
 /// Encrypt `bytes` with the given `nonce` and `pass`

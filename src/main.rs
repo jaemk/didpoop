@@ -96,6 +96,7 @@ pub struct Config {
     // and auth cookie
     pub real_host: Option<String>,
     pub real_domain: Option<String>,
+    pub cookie_name: String,
     pub secure_cookie: bool, // only set to false for local dev
 
     pub log_level: String,
@@ -127,6 +128,7 @@ impl Config {
             port: env_or("PORT", "3030").parse().expect("invalid port"),
             real_host: std::env::var("REAL_HOSTNAME").ok(),
             real_domain: std::env::var("REAL_DOMAIN").ok(),
+            cookie_name: "poop_auth".to_string(),
             secure_cookie: env_or("SECURE_COOKIE", "true") != "false",
             log_level: env_or("LOG_LEVEL", "info"),
             db_url: env_or("DATABASE_URL", "error"),
@@ -312,7 +314,8 @@ impl Guard for LoginGuard {
 
 fn format_set_cookie(token: &str) -> String {
     format!(
-        "poop_auth={token}; Domain={domain}; {secure} HttpOnly; Max-Age={max_age}; SameSite=Lax; Path=/",
+        "{name}={token}; Domain={domain}; {secure} HttpOnly; Max-Age={max_age}; SameSite=Lax; Path=/",
+        name = &CONFIG.cookie_name,
         token = token,
         domain = &CONFIG.get_real_domain(),
         secure = if CONFIG.secure_cookie { "Secure;" } else { "" },
@@ -485,7 +488,7 @@ async fn run() -> Result<()> {
     let graphql_post = warp::path!("api" / "graphql")
         .and(warp::path::end())
         .map(move || pool.clone())
-        .and(warp::filters::cookie::optional("poop_auth"))
+        .and(warp::filters::cookie::optional(&CONFIG.cookie_name))
         .and(async_graphql_warp::graphql(schema.clone()))
         .and_then(
             |pool: PgPool,

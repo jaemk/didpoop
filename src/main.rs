@@ -485,15 +485,12 @@ async fn run() -> Result<()> {
     let graphql_post = warp::path!("api" / "graphql")
         .and(warp::path::end())
         .map(move || pool.clone())
-        .and(warp::filters::header::optional("cookie"))
         .and(warp::filters::cookie::optional("poop_auth"))
         .and(async_graphql_warp::graphql(schema.clone()))
         .and_then(
             |pool: PgPool,
-             cookie_header: Option<String>,
              cookie: Option<String>,
              (schema, mut request): (Schema, async_graphql::Request)| async move {
-                tracing::info!(cookie_header=?cookie_header, cookie = ?cookie);
                 if let Some(cookie) = cookie {
                     let hash = crypto::hmac_sign(&cookie);
                     let u: Result<User> = sqlx::query_as(
@@ -509,8 +506,8 @@ async fn run() -> Result<()> {
                     .fetch_one(&pool)
                     .await
                     .map_err(AppError::from);
-                    tracing::info!(user = ?u.as_ref().map(|u| &u.email), "found user for request");
                     if let Ok(u) = u {
+                        tracing::info!(user = %u.email, user_id = %u.id, "found user for request");
                         request.data.insert(u);
                     }
                 }

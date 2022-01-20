@@ -230,6 +230,24 @@ impl CreatureRelation {
     async fn id(&self) -> String {
         self.id.to_string()
     }
+    async fn rel_user_id(&self) -> String {
+        self.user_id.to_string()
+    }
+    async fn rel_kind(&self) -> &str {
+        &self.kind
+    }
+    async fn creator_id(&self) -> String {
+        self.creator_id.to_string()
+    }
+    async fn name(&self) -> &str {
+        &self.name
+    }
+    async fn created(&self) -> DateTime<Utc> {
+        self.created
+    }
+    async fn modified(&self) -> DateTime<Utc> {
+        self.modified
+    }
 }
 
 struct PgLoader {
@@ -420,8 +438,55 @@ impl MutationRoot {
     }
 
     #[graphql(guard = "LoginGuard::new()")]
-    async fn do_thing(&self, _ctx: &Context<'_>) -> FieldResult<bool> {
-        Ok(true)
+    async fn create_creature(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> FieldResult<CreatureRelation> {
+        let user = ctx.data_unchecked::<User>();
+        let pool = ctx.data_unchecked::<PgPool>();
+        #[derive(sqlx::FromRow)]
+        struct CId {
+            id: i64,
+        }
+
+        let mut tr = pool.begin().await?;
+        let c_id: CId = sqlx::query_as(
+            "insert into poop.creatures (creator_id, name) values ($1, $2) returning id",
+        )
+        .bind(&user.id)
+        .bind(&name)
+        .fetch_one(&mut tr)
+        .await?;
+
+        sqlx::query(
+            r##"
+            insert into poop.creature_access
+                (creature_id, user_id, creator_id, kind) values
+                ($1, $2, $3, $4)
+            "##,
+        )
+        .bind(&c_id.id)
+        .bind(&user.id)
+        .bind(&user.id)
+        .bind("creator")
+        .execute(&mut tr)
+        .await?;
+
+        let c: CreatureRelation = sqlx::query_as(
+            r##"
+            select c.*, ca.user_id, ca.kind from poop.creatures c
+                inner join poop.creature_access ca on ca.creature_id = c.id
+            where c.id = $1
+                and c.deleted is false
+                and ca.deleted is false
+            "##,
+        )
+        .bind(&c_id.id)
+        .fetch_one(&mut tr)
+        .await?;
+        tr.commit().await?;
+        Ok(c)
     }
 }
 

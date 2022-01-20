@@ -532,6 +532,9 @@ async fn run() -> Result<()> {
         .or(status)
         .with(warp::trace::request());
 
+    if !CONFIG.secure_cookie {
+        tracing::warn!("*** SECURE COOKIE IS DISABLED ***");
+    }
     tracing::info!(
         version = %CONFIG.version,
         addr = %addr,

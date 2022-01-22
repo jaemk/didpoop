@@ -185,20 +185,63 @@ impl MutationRoot {
         tr.commit().await?;
         Ok(c)
     }
+
+    #[graphql(guard = "LoginGuard::new()")]
+    async fn create_poop(&self, ctx: &Context<'_>, creature_id: String) -> FieldResult<Poop> {
+        let user = ctx.data_unchecked::<User>();
+        let pool = ctx.data_unchecked::<PgPool>();
+
+        let creature_id = creature_id.parse::<i64>()?;
+
+        #[derive(sqlx::FromRow)]
+        struct CId {
+            id: i64,
+        }
+
+        let mut tr = pool.begin().await?;
+        let c_id: Option<CId> = sqlx::query_as(
+            r##"
+            select ca.creature_id as id from poop.creature_access ca
+                where ca.creature_id = $1
+                    and ca.user_id = $2
+                    and ca.deleted is false
+            "##,
+        )
+        .bind(&creature_id)
+        .bind(&user.id)
+        .fetch_optional(&mut tr)
+        .await?;
+
+        if let Some(c_id) = c_id {
+            let p: Poop = sqlx::query_as(
+                r##"
+            insert into poop.poops
+                (creator_id, creature_id)
+                values ($1, $2)
+                returning *
+            "##,
+            )
+            .bind(&user.id)
+            .bind(&c_id.id)
+            .fetch_one(&mut tr)
+            .await?;
+
+            tr.commit().await?;
+            Ok(p)
+        } else {
+            Err(AppError::Unauthorized(format!(
+                "user {} cannot access creator {}",
+                user.id, creature_id
+            ))
+            .extend())
+        }
+    }
 }
 
 pub struct QueryRoot;
 
 #[Object]
 impl QueryRoot {
-    #[graphql(guard = "LoginGuard::new()")]
-    async fn poops(&self, _ctx: &Context<'_>) -> Vec<Poop> {
-        vec![Poop {
-            id: String::from("1").into(),
-            maker: String::from("James"),
-        }]
-    }
-
     #[graphql(guard = "LoginGuard::new()")]
     async fn user(&self, ctx: &Context<'_>) -> Option<User> {
         let u = ctx.data_opt::<User>();

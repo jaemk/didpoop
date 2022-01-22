@@ -1,5 +1,5 @@
-use crate::loaders::{CreaturesForUserId, PgLoader};
-use async_graphql::{Context, Object, ID};
+use crate::loaders::{CreaturesForUserId, PgLoader, PoopsForCreatureId};
+use async_graphql::{Context, Object};
 use chrono::{DateTime, Utc};
 
 #[derive(Clone, sqlx::FromRow)]
@@ -69,6 +69,13 @@ impl CreatureRelation {
     async fn name(&self) -> &str {
         &self.name
     }
+    async fn poops(&self, ctx: &Context<'_>) -> Vec<Poop> {
+        ctx.data_unchecked::<async_graphql::dataloader::DataLoader<PgLoader>>()
+            .load_one(PoopsForCreatureId(self.id))
+            .await
+            .unwrap()
+            .unwrap_or_else(Vec::new)
+    }
     async fn created(&self) -> DateTime<Utc> {
         self.created
     }
@@ -77,19 +84,31 @@ impl CreatureRelation {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, sqlx::FromRow)]
 pub struct Poop {
-    pub id: ID,
-    pub maker: String,
+    pub id: i64,
+    pub creator_id: i64,
+    pub creature_id: i64,
+    pub deleted: bool,
+    pub created: DateTime<Utc>,
+    pub modified: DateTime<Utc>,
 }
 
 #[Object]
 impl Poop {
-    async fn id(&self) -> &str {
-        &self.id
+    async fn id(&self) -> String {
+        self.id.to_string()
     }
-
-    async fn maker(&self) -> &str {
-        &self.maker
+    async fn creator_id(&self) -> String {
+        self.creator_id.to_string()
+    }
+    async fn creature_id(&self) -> String {
+        self.creature_id.to_string()
+    }
+    async fn created(&self) -> DateTime<Utc> {
+        self.created
+    }
+    async fn modified(&self) -> DateTime<Utc> {
+        self.modified
     }
 }

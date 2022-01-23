@@ -1,4 +1,4 @@
-use async_graphql::EmptySubscription;
+use async_graphql::{dataloader::HashMapCache, EmptySubscription};
 use async_graphql_warp::GraphQLResponse;
 use sqlx::PgPool;
 use std::convert::Infallible;
@@ -89,12 +89,12 @@ async fn run() -> Result<()> {
                         request.data.insert(u);
                     }
                 }
-                request
-                    .data
-                    .insert(async_graphql::dataloader::DataLoader::new(
-                        PgLoader::new(pool),
-                        tokio::spawn,
-                    ));
+                let loader = async_graphql::dataloader::DataLoader::with_cache(
+                    PgLoader::new(pool),
+                    tokio::spawn,
+                    HashMapCache::default(),
+                );
+                request.data.insert(loader);
 
                 let resp = schema.execute(request).await;
                 Ok::<_, Infallible>(GraphQLResponse::from(resp))

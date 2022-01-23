@@ -51,12 +51,24 @@ impl From<sqlx::Error> for AppError {
 impl ErrorExtensions for AppError {
     fn extend(&self) -> FieldError {
         self.extend_with(|err, e| match err {
-            AppError::E(_) => e.set("code", "500"),
+            AppError::E(s) => {
+                e.set("code", "500");
+                e.set("error", s.clone());
+            }
             AppError::DB(_) => e.set("code", 500),
             AppError::DBNotFound(_) => e.set("code", 404),
-            AppError::Unauthorized(_) => e.set("code", 401),
-            AppError::Forbidden(_) => e.set("code", 403),
-            AppError::BadRequest(_) => e.set("code", 400),
+            AppError::Unauthorized(s) => {
+                e.set("code", 401);
+                e.set("error", s.clone());
+            }
+            AppError::Forbidden(s) => {
+                e.set("code", 403);
+                e.set("error", s.clone());
+            }
+            AppError::BadRequest(s) => {
+                e.set("code", 400);
+                e.set("error", s.clone());
+            }
             AppError::Hex(_) => e.set("code", 500),
         })
     }

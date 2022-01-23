@@ -204,6 +204,7 @@ impl MutationRoot {
             select ca.creature_id as id from poop.creature_access ca
                 where ca.creature_id = $1
                     and ca.user_id = $2
+                    and ca.kind in ('creator', 'pooper')
                     and ca.deleted is false
             "##,
         )
@@ -230,7 +231,7 @@ impl MutationRoot {
             Ok(p)
         } else {
             Err(AppError::Unauthorized(format!(
-                "user {} cannot access creator {}",
+                "user {} doesn't have poop creation clearance for creature {}",
                 user.id, creature_id
             ))
             .extend())

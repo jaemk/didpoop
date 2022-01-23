@@ -3,7 +3,7 @@ use async_graphql_warp::GraphQLResponse;
 use sqlx::PgPool;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use warp::Filter;
+use warp::{hyper::Method, Filter};
 
 mod config;
 mod crypto;
@@ -62,6 +62,7 @@ async fn run() -> Result<()> {
 
     let graphql_post = warp::path!("api" / "graphql")
         .and(warp::path::end())
+        .and(warp::post())
         .map(move || pool.clone())
         .and(warp::filters::cookie::optional(&CONFIG.cookie_name))
         .and(async_graphql_warp::graphql(schema.clone()))
@@ -101,10 +102,28 @@ async fn run() -> Result<()> {
             },
         );
 
+    let index_options = warp::path::end().and(warp::options()).map(warp::reply);
+
+    let graphql_options = warp::path!("api" / "graphql")
+        .and(warp::path::end())
+        .and(warp::options())
+        .map(warp::reply);
+
+    let cors = warp::cors()
+        .allow_methods(&[Method::GET, Method::POST])
+        .allow_headers(["cookie", "content-type"])
+        .allow_origins([
+            "http://localhost:3000",
+            "http://localhost:3003",
+            "https://didpoop.com",
+        ]);
     let routes = index
+        .or(index_options)
         .or(graphql_post)
+        .or(graphql_options)
         .or(favicon)
         .or(status)
+        .with(cors)
         .with(warp::trace::request());
 
     if !CONFIG.secure_cookie {

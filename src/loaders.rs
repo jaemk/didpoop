@@ -26,6 +26,7 @@ impl async_graphql::dataloader::Loader<UserId> for PgLoader {
         &self,
         keys: &[UserId],
     ) -> std::result::Result<HashMap<UserId, Self::Value>, Self::Error> {
+        tracing::info!("loading {} users", keys.len());
         let query = r##"
             select * from poop.users where id in (select * from unnest($1))
         "##;
@@ -35,6 +36,7 @@ impl async_graphql::dataloader::Loader<UserId> for PgLoader {
             .fetch_all(&self.pool)
             .await
             .map_err(AppError::from)?;
+        tracing::info!("loaded {} users", res.len());
         let res = res.into_iter().fold(HashMap::new(), |mut acc, u| {
             acc.insert(UserId(u.id), u);
             acc
@@ -55,6 +57,7 @@ impl async_graphql::dataloader::Loader<CreatureUserId> for PgLoader {
         &self,
         keys: &[CreatureUserId],
     ) -> std::result::Result<HashMap<CreatureUserId, Self::Value>, Self::Error> {
+        tracing::info!("loading {} creatures for users", keys.len());
         let query = r##"
             select c.*, ca.user_id, ca.kind from poop.creatures c
                 inner join poop.creature_access ca on ca.creature_id = c.id
@@ -73,6 +76,7 @@ impl async_graphql::dataloader::Loader<CreatureUserId> for PgLoader {
             .fetch_all(&self.pool)
             .await
             .map_err(AppError::from)?;
+        tracing::info!("loaded {} creatures for users", res.len());
         let res = res.into_iter().fold(HashMap::new(), |mut acc, c| {
             acc.insert(CreatureUserId(c.id, c.user_id), c);
             acc
@@ -93,6 +97,7 @@ impl async_graphql::dataloader::Loader<CreaturesForUserId> for PgLoader {
         &self,
         keys: &[CreaturesForUserId],
     ) -> std::result::Result<HashMap<CreaturesForUserId, Self::Value>, Self::Error> {
+        tracing::info!("loading {} creatures", keys.len());
         let query = r##"
             select c.*, ca.user_id, ca.kind from poop.creatures c
                 inner join poop.creature_access ca on ca.creature_id = c.id
@@ -106,6 +111,7 @@ impl async_graphql::dataloader::Loader<CreaturesForUserId> for PgLoader {
             .fetch_all(&self.pool)
             .await
             .map_err(AppError::from)?;
+        tracing::info!("loaded {} creatures", res.len());
         let res = res.into_iter().fold(HashMap::new(), |mut acc, c| {
             {
                 let e = acc
@@ -131,6 +137,7 @@ impl async_graphql::dataloader::Loader<PoopsForCreatureId> for PgLoader {
         &self,
         keys: &[PoopsForCreatureId],
     ) -> std::result::Result<HashMap<PoopsForCreatureId, Self::Value>, Self::Error> {
+        tracing::info!("loading {} poops for creatures", keys.len());
         let query = r##"
             select p.* from poop.poops p
             where p.creature_id in (select * from unnest($1))
@@ -143,6 +150,7 @@ impl async_graphql::dataloader::Loader<PoopsForCreatureId> for PgLoader {
             .fetch_all(&self.pool)
             .await
             .map_err(AppError::from)?;
+        tracing::info!("loaded {} poops for creatures", res.len());
         let res = res.into_iter().fold(HashMap::new(), |mut acc, p| {
             {
                 let e = acc

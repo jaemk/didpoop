@@ -43,7 +43,7 @@ impl Config {
         Self {
             version,
             host: env_or("HOST", "localhost"),
-            port: env_or("PORT", "3030").parse().expect("invalid port"),
+            port: env_or("PORT", "3003").parse().expect("invalid port"),
             real_host: std::env::var("REAL_HOSTNAME").ok(),
             real_domain: std::env::var("REAL_DOMAIN").ok(),
             cookie_name: "poop_auth".to_string(),
